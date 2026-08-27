@@ -44,7 +44,7 @@ while true; do
     echo "----------------------------------"
     echo "13. Argo隧道脚本"
     echo "14. 网络重装系统"
-    echo "15. BBR加速脚本"
+    echo "15. BBR加速"
     echo "88. 更多功能"
     echo "----------------------------------"
     echo "0. 退出脚本"
@@ -242,13 +242,51 @@ while true; do
             wait_return
             ;;
         15)
-            echo ""
-            echo "正在执行BBR加速脚本..."
-            echo "----------------------------------"
-            bash <(curl -fsSL https://vpszdm.com/bbr.sh) || error_exit "BBR加速脚本执行失败"
-            echo "----------------------------------"
-            echo "BBR加速脚本执行完成！"
-            wait_return
+            while true; do
+                clear
+                echo "=================================="
+                echo "          BBR加速管理            "
+                echo "=================================="
+                echo "1. BBR加速脚本"
+                echo "2. BBR-V3脚本"
+                echo "0. 返回主菜单"
+                echo "=================================="
+                read -p "请输入选项（0-2）: " bbr_input
+
+                if ! [[ "$bbr_input" =~ ^[0-2]$ ]]; then
+                    echo ""
+                    echo "无效选项，请重新输入"
+                    sleep 1
+                    echo ""
+                    continue
+                fi
+
+                case "$bbr_input" in
+                    0)
+                        break
+                        ;;
+                    1)
+                        echo ""
+                        echo "正在执行BBR加速脚本..."
+                        echo "----------------------------------"
+                        bash <(curl -fsSL https://vpszdm.com/bbr.sh) || error_exit "BBR加速脚本执行失败"
+                        echo "----------------------------------"
+                        echo "BBR加速脚本执行完成！"
+                        wait_return
+                        break
+                        ;;
+                    2)
+                        echo ""
+                        echo "正在执行BBR-V3脚本..."
+                        echo "----------------------------------"
+                        bash <(curl -fsSL https://raw.githubusercontent.com/byJoey/Actions-bbr-v3/main/install.sh) || error_exit "BBR-V3脚本执行失败"
+                        echo "----------------------------------"
+                        echo "BBR-V3脚本执行完成！"
+                        wait_return
+                        break
+                        ;;
+                esac
+            done
             ;;
         88)
             echo ""
