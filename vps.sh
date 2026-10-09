@@ -249,11 +249,12 @@ while true; do
                 echo "=================================="
                 echo "1. BBR加速脚本"
                 echo "2. BBR-V3脚本"
+                echo "3. TCP调优"
                 echo "0. 返回主菜单"
                 echo "=================================="
-                read -p "请输入选项（0-2）: " bbr_input
+                read -p "请输入选项（0-3）: " bbr_input
 
-                if ! [[ "$bbr_input" =~ ^[0-2]$ ]]; then
+                if ! [[ "$bbr_input" =~ ^[0-3]$ ]]; then
                     echo ""
                     echo "无效选项，请重新输入"
                     sleep 1
@@ -282,6 +283,16 @@ while true; do
                         bash <(curl -fsSL https://raw.githubusercontent.com/byJoey/Actions-bbr-v3/main/install.sh) || error_exit "BBR-V3脚本执行失败"
                         echo "----------------------------------"
                         echo "BBR-V3脚本执行完成！"
+                        wait_return
+                        break
+                        ;;
+                    3)
+                        echo ""
+                        echo "正在执行TCP调优脚本..."
+                        echo "----------------------------------"
+                        bash <(curl -fsSL https://raw.githubusercontent.com/Kylin010/tcpfit/main/tcpfit.sh) || error_exit "TCP调优脚本执行失败"
+                        echo "----------------------------------"
+                        echo "TCP调优脚本执行完成！"
                         wait_return
                         break
                         ;;
