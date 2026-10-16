@@ -300,13 +300,51 @@ while true; do
             done
             ;;
         88)
-            echo ""
-            echo "正在执行更多功能脚本..."
-            echo "----------------------------------"
-            bash <(curl -s https://raw.githubusercontent.com/everett7623/vps_scripts/main/vps_scripts.sh) || error_exit "更多功能脚本执行失败"
-            echo "----------------------------------"
-            echo "脚本执行完成！"
-            wait_return
+            while true; do
+                clear
+                echo "=================================="
+                echo "          更多功能               "
+                echo "=================================="
+                echo "1. 第三方VPS工具脚本"
+                echo "2. TcpQuality"
+                echo "0. 返回主菜单"
+                echo "=================================="
+                read -p "请输入选项（0-2）: " more_input
+
+                if ! [[ "$more_input" =~ ^[0-2]$ ]]; then
+                    echo ""
+                    echo "无效选项，请重新输入"
+                    sleep 1
+                    echo ""
+                    continue
+                fi
+
+                case "$more_input" in
+                    0)
+                        break
+                        ;;
+                    1)
+                        echo ""
+                        echo "正在执行第三方VPS工具脚本..."
+                        echo "----------------------------------"
+                        bash <(curl -s https://raw.githubusercontent.com/everett7623/vps_scripts/main/vps_scripts.sh) || error_exit "第三方VPS工具脚本执行失败"
+                        echo "----------------------------------"
+                        echo "第三方VPS工具脚本执行完成！"
+                        wait_return
+                        break
+                        ;;
+                    2)
+                        echo ""
+                        echo "正在执行TcpQuality脚本..."
+                        echo "----------------------------------"
+                        bash <(curl -fsSL https://raw.githubusercontent.com/ibsgss/TcpQuality/main/runTcpQuality.sh) || error_exit "TcpQuality脚本执行失败"
+                        echo "----------------------------------"
+                        echo "TcpQuality脚本执行完成！"
+                        wait_return
+                        break
+                        ;;
+                esac
+            done
             ;;
         *)
             echo ""
