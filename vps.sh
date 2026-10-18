@@ -20,6 +20,184 @@ error_exit() {
     wait_return
 }
 
+# ================== iptables转发管理 ==================
+fwd_enabled() {
+    [ "$(cat /proc/sys/net/ipv4/ip_forward 2>/dev/null)" = "1" ]
+}
+
+fwd_set_forward() {
+    [ -f /etc/sysctl.conf ] || touch /etc/sysctl.conf
+    sed -i '/net\.ipv4\.ip_forward/d' /etc/sysctl.conf
+    echo "net.ipv4.ip_forward = $1" >> /etc/sysctl.conf
+    sysctl -w net.ipv4.ip_forward="$1" >/dev/null
+}
+
+fwd_show_rules() {
+    rules=$(iptables -t nat -nL PREROUTING --line-number 2>/dev/null | grep 'DNAT')
+    if [ -z "$rules" ]; then
+        echo "暂无转发规则"
+    else
+        echo "$rules"
+    fi
+}
+
+fwd_add_rule() {
+    proto="$1"
+    read -p "请输入本机监听端口: " fwd_local
+    read -p "请输入目标服务器IP: " fwd_ip
+    read -p "请输入目标服务器端口: " fwd_port
+    if ! [[ "$fwd_local" =~ ^[0-9]+$ ]] || ! [[ "$fwd_port" =~ ^[0-9]+$ ]] || ! [[ "$fwd_ip" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        echo "错误：输入无效！"
+        return 1
+    fi
+    if [ "$proto" = "tcp" ] || [ "$proto" = "both" ]; then
+        iptables -t nat -A PREROUTING -p tcp --dport "$fwd_local" -j DNAT --to-destination "$fwd_ip:$fwd_port" || { echo "错误：TCP规则添加失败"; return 1; }
+        iptables -t nat -A POSTROUTING -p tcp -d "$fwd_ip" --dport "$fwd_port" -j MASQUERADE
+    fi
+    if [ "$proto" = "udp" ] || [ "$proto" = "both" ]; then
+        iptables -t nat -A PREROUTING -p udp --dport "$fwd_local" -j DNAT --to-destination "$fwd_ip:$fwd_port" || { echo "错误：UDP规则添加失败"; return 1; }
+        iptables -t nat -A POSTROUTING -p udp -d "$fwd_ip" --dport "$fwd_port" -j MASQUERADE
+    fi
+    echo "转发规则添加成功！"
+}
+
+fwd_del_rule() {
+    proto="$1"
+    if [ "$proto" = "tcp" ]; then
+        rules=$(iptables -t nat -nL PREROUTING --line-number 2>/dev/null | grep 'DNAT' | grep ' tcp ')
+    elif [ "$proto" = "udp" ]; then
+        rules=$(iptables -t nat -nL PREROUTING --line-number 2>/dev/null | grep 'DNAT' | grep ' udp ')
+    else
+        rules=$(iptables -t nat -nL PREROUTING --line-number 2>/dev/null | grep 'DNAT')
+    fi
+    if [ -z "$rules" ]; then
+        echo "暂无转发规则"
+        return 1
+    fi
+    echo "当前转发规则："
+    echo "$rules"
+    echo "----------------------------------"
+    read -p "请输入要删除的规则序号: " fwd_num
+    if ! [[ "$fwd_num" =~ ^[0-9]+$ ]]; then
+        echo "错误：输入无效！"
+        return 1
+    fi
+    line=$(echo "$rules" | awk -v n="$fwd_num" '$1==n')
+    if [ -z "$line" ]; then
+        echo "错误：序号不存在！"
+        return 1
+    fi
+    fwd_dest=$(echo "$line" | sed -n 's/.*to:\([0-9.]*\):\([0-9]*\).*/\1 \2/p')
+    fwd_dport=$(echo "$line" | sed -n 's/.*dpt:\([0-9]*\).*/\1/p')
+    if [ -z "$fwd_dest" ] || [ -z "$fwd_dport" ]; then
+        echo "错误：规则解析失败！"
+        return 1
+    fi
+    fwd_ip=$(echo "$fwd_dest" | awk '{print $1}')
+    fwd_port=$(echo "$fwd_dest" | awk '{print $2}')
+    if [ "$proto" = "tcp" ]; then
+        iptables -t nat -D PREROUTING "$fwd_num"
+        iptables -t nat -D POSTROUTING -p tcp -d "$fwd_ip" --dport "$fwd_port" -j MASQUERADE 2>/dev/null
+    elif [ "$proto" = "udp" ]; then
+        iptables -t nat -D PREROUTING "$fwd_num"
+        iptables -t nat -D POSTROUTING -p udp -d "$fwd_ip" --dport "$fwd_port" -j MASQUERADE 2>/dev/null
+    else
+        iptables -t nat -D PREROUTING -p tcp --dport "$fwd_dport" -j DNAT --to-destination "$fwd_ip:$fwd_port" 2>/dev/null
+        iptables -t nat -D PREROUTING -p udp --dport "$fwd_dport" -j DNAT --to-destination "$fwd_ip:$fwd_port" 2>/dev/null
+        iptables -t nat -D POSTROUTING -p tcp -d "$fwd_ip" --dport "$fwd_port" -j MASQUERADE 2>/dev/null
+        iptables -t nat -D POSTROUTING -p udp -d "$fwd_ip" --dport "$fwd_port" -j MASQUERADE 2>/dev/null
+    fi
+    echo "转发规则删除成功！"
+}
+
+iptables_menu() {
+    while true; do
+        clear
+        echo "=================================="
+        echo "        iptables转发管理          "
+        echo "=================================="
+        if fwd_enabled; then
+            echo "当前IP转发状态：已开启"
+        else
+            echo "当前IP转发状态：已关闭"
+        fi
+        echo "=================================="
+        echo "1. 开启/关闭转发功能"
+        echo "2. 添加TCP转发规则"
+        echo "3. 删除TCP转发规则"
+        echo "4. 添加UDP转发规则"
+        echo "5. 删除UDP转发规则"
+        echo "6. 添加TCP+UDP转发规则"
+        echo "7. 删除TCP+UDP转发规则"
+        echo "8. 查看当前转发规则"
+        echo "0. 返回上一级菜单"
+        echo "=================================="
+        read -p "请输入选项（0-8）: " fwd_input
+
+        if ! [[ "$fwd_input" =~ ^[0-8]$ ]]; then
+            echo ""
+            echo "无效选项，请重新输入"
+            sleep 1
+            echo ""
+            continue
+        fi
+
+        case "$fwd_input" in
+            0)
+                break
+                ;;
+            1)
+                echo ""
+                if fwd_enabled; then
+                    fwd_set_forward 0
+                    echo "转发功能已关闭！"
+                else
+                    fwd_set_forward 1
+                    echo "转发功能已开启！"
+                fi
+                sleep 1
+                ;;
+            2)
+                echo ""
+                fwd_add_rule "tcp"
+                wait_return
+                ;;
+            3)
+                echo ""
+                fwd_del_rule "tcp"
+                wait_return
+                ;;
+            4)
+                echo ""
+                fwd_add_rule "udp"
+                wait_return
+                ;;
+            5)
+                echo ""
+                fwd_del_rule "udp"
+                wait_return
+                ;;
+            6)
+                echo ""
+                fwd_add_rule "both"
+                wait_return
+                ;;
+            7)
+                echo ""
+                fwd_del_rule "both"
+                wait_return
+                ;;
+            8)
+                echo ""
+                echo "当前转发规则："
+                echo "----------------------------------"
+                fwd_show_rules
+                wait_return
+                ;;
+        esac
+    done
+}
+
 check_root
 
 while true; do
@@ -307,11 +485,12 @@ while true; do
                 echo "=================================="
                 echo "1. 第三方VPS工具脚本"
                 echo "2. TcpQuality"
+                echo "3. iptables转发管理"
                 echo "0. 返回主菜单"
                 echo "=================================="
-                read -p "请输入选项（0-2）: " more_input
+                read -p "请输入选项（0-3）: " more_input
 
-                if ! [[ "$more_input" =~ ^[0-2]$ ]]; then
+                if ! [[ "$more_input" =~ ^[0-3]$ ]]; then
                     echo ""
                     echo "无效选项，请重新输入"
                     sleep 1
@@ -342,6 +521,10 @@ while true; do
                         echo "TcpQuality脚本执行完成！"
                         wait_return
                         break
+                        ;;
+                    3)
+                        echo ""
+                        iptables_menu
                         ;;
                 esac
             done
